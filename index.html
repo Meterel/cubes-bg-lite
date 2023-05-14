@@ -95,7 +95,7 @@
                 scale:THREE.MathUtils.randFloat(0.25,1),
                 rot,
                 pos:new THREE.Vector2(Math.random()*1000,Math.random()*1000),
-                dir:rot.z,
+                dir:rot.z/2,
                 speed:THREE.MathUtils.randFloat(0.25,1)
             };
         }
@@ -150,10 +150,10 @@
 
             for(let i=0;i<cubes.count;i++){
                 const sx=window.innerWidth/window.innerHeight*frame_size+2;
-                cubes_arr[i].pos.x=mod_range(cubes_arr[i].pos.x+(movement.x*0.01-10*cubes_arr[i].speed)*delta*cubes_arr[i].scale,-sx,sx);
-                cubes_arr[i].pos.y=mod_range(cubes_arr[i].pos.y-movement.y*0.01*delta*cubes_arr[i].scale,-frame_size-2,frame_size+2);
+                cubes_arr[i].pos.x=mod_range(cubes_arr[i].pos.x+(movement.x/window.innerWidth*20-10*cubes_arr[i].speed)*delta*cubes_arr[i].scale,-sx,sx);
+                cubes_arr[i].pos.y=mod_range(cubes_arr[i].pos.y-movement.y/window.innerHeight*20*delta*cubes_arr[i].scale,-frame_size-2,frame_size+2);
 
-                cubes_arr[i].rot.z+=cubes_arr[i].dir*0.5*delta;
+                cubes_arr[i].rot.z+=cubes_arr[i].dir*delta;
 
                 const matrix=new THREE.Matrix4()
                 .makeRotationFromEuler(cubes_arr[i].rot)
