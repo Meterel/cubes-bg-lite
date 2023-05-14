@@ -1,0 +1,171 @@
+<!-- Made by Meterel -->
+
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Cubes Lite</title>
+    </head>
+
+    <body style="overflow: clip;margin: 0px;user-select: none;background: black;"></body>
+
+    <script type="importmap">
+        {
+            "imports":{
+                "three":"https://unpkg.com/three@0.152.2/build/three.module.min.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        "use strict";
+
+
+        function pos_mod(num,mod){
+            return num-Math.floor(num/mod)*mod;
+        }
+
+        function mod_range(num,from,to){
+            return pos_mod(num-from,to-from)+from;
+        }
+
+
+        import * as THREE from "three";
+        import {UnrealBloomPass} from "https://unpkg.com/three@0.152.2/examples/jsm/postprocessing/UnrealBloomPass.js";
+        import {EffectComposer} from "https://unpkg.com/three@0.152.2/examples/jsm/postprocessing/EffectComposer.js";
+        import {RenderPass} from "https://unpkg.com/three@0.152.2/examples/jsm/postprocessing/RenderPass.js";
+        import {OBJLoader} from "https://unpkg.com/three@0.152.2/examples/jsm/loaders/OBJLoader.js";
+
+        const scene=new THREE.Scene();
+        const renderer=new THREE.WebGLRenderer({antialias:true,precision:"lowp"});
+        document.body.appendChild(renderer.domElement);
+
+        const camera=new THREE.OrthographicCamera();
+        camera.position.z=50;
+        const composer=new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene,camera));
+        composer.addPass(new UnrealBloomPass());
+
+
+        const cubes=new THREE.InstancedMesh(
+            (await new Promise((f)=>{
+                new OBJLoader().load("rotated, uv gradient, clean geo, wireframe cube.obj",f);
+            })).children[0].geometry,
+
+            new THREE.ShaderMaterial({
+                uniforms:{
+                    time:{value:1}
+                },
+
+                vertexShader:`
+                    varying float uvx;
+
+                    void main() {
+                        gl_Position = projectionMatrix * viewMatrix * modelMatrix * instanceMatrix * vec4(position, 1.0);
+
+                        uvx=uv.x;
+                    }
+                `,
+
+                fragmentShader:`
+                    uniform float time;
+                    varying float uvx;
+
+                    vec3 hsv2rgb(vec3 c) {
+                        vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+                        vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+                        return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+                    }
+
+                    void main(){
+                        gl_FragColor=vec4(hsv2rgb(vec3(time/20.+uvx*0.17,1.,1.)),1.);
+                    }
+                `
+        }),75);
+
+        const cubes_arr=new Array(cubes.count);
+
+        for(let i=0;i<cubes.count;i++){
+            const rot=new THREE.Euler(THREE.MathUtils.randFloatSpread(Math.PI*2),THREE.MathUtils.randFloatSpread(Math.PI*2),THREE.MathUtils.randFloatSpread(Math.PI*2));
+
+            cubes_arr[i]={
+                scale:THREE.MathUtils.randFloat(0.25,1),
+                rot,
+                pos:new THREE.Vector2(Math.random()*1000,Math.random()*1000),
+                dir:rot.z,
+                speed:THREE.MathUtils.randFloat(0.25,1)
+            };
+        }
+        cubes.instanceMatrix.needsUpdate=true;
+
+        scene.add(cubes);
+
+
+        const frame_size=15;
+        onresize=()=>{
+            const aspect=window.innerWidth/window.innerHeight;
+            camera.left=-aspect*frame_size;
+            camera.right=aspect*frame_size;
+            camera.top=frame_size;
+            camera.bottom=-frame_size;
+            camera.updateProjectionMatrix();
+
+            renderer.setSize(window.innerWidth,window.innerHeight);
+            composer.setSize(window.innerWidth,window.innerHeight);
+        };
+        onresize();
+
+        const movement=new THREE.Vector2();
+
+        addEventListener("mousemove",(e)=>{
+            movement.x+=e.movementX;
+            movement.y+=e.movementY;
+        });
+
+        const last_touch=new THREE.Vector2();
+        function touch_move(e){
+            if(e.type==="touchmove"){
+                movement.x+=e.touches[0].clientX-last_touch.x;
+                movement.y+=e.touches[0].clientY-last_touch.y;
+            }
+            last_touch.x=e.touches[0].clientX;
+            last_touch.y=e.touches[0].clientY;
+        }
+
+        addEventListener("touchstart",touch_move);
+        addEventListener("touchmove",touch_move);
+
+        let then=0;
+        function process(now){
+            requestAnimationFrame(process);
+            if(then===now) return;
+            const delta=(now-then)/1000;
+            then=now;
+
+            cubes.material.uniforms.time.value+=delta;
+            movement.lerp(new THREE.Vector2(),Math.min(delta/2,1));
+
+            for(let i=0;i<cubes.count;i++){
+                const sx=window.innerWidth/window.innerHeight*frame_size+2;
+                cubes_arr[i].pos.x=mod_range(cubes_arr[i].pos.x+(movement.x*0.01-10*cubes_arr[i].speed)*delta*cubes_arr[i].scale,-sx,sx);
+                cubes_arr[i].pos.y=mod_range(cubes_arr[i].pos.y-movement.y*0.01*delta*cubes_arr[i].scale,-frame_size-2,frame_size+2);
+
+                cubes_arr[i].rot.z+=cubes_arr[i].dir*0.5*delta;
+
+                const matrix=new THREE.Matrix4()
+                .makeRotationFromEuler(cubes_arr[i].rot)
+                .setPosition(cubes_arr[i].pos.x,cubes_arr[i].pos.y,-50+cubes_arr[i].scale*50);
+
+                for(let x=0;x<11;x++) matrix.elements[x]*=cubes_arr[i].scale;
+                
+                cubes.setMatrixAt(i,matrix);
+            }
+            cubes.instanceMatrix.needsUpdate=true;
+
+            composer.render();
+        }
+        requestAnimationFrame(process);
+    </script>
+</html>
