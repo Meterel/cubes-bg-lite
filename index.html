@@ -41,7 +41,7 @@
 
         const scene=new THREE.Scene();
         const renderer=new THREE.WebGLRenderer({antialias:true,precision:"lowp"});
-        document.body.appendChild(renderer.domElement);
+        document.body.append(renderer.domElement);
 
         const camera=new THREE.OrthographicCamera();
         camera.position.z=50;
